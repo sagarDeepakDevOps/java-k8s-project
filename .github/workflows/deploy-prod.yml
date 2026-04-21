@@ -1,0 +1,46 @@
+# ==========================================================
+# .github/workflows/deploy-prod.yml
+# Manual Approved Deploy to PROD
+# ==========================================================
+name: Deploy PROD
+
+on:
+  workflow_dispatch:
+
+env:
+  AWS_REGION: us-east-1
+  CLUSTER_NAME: eks-prod
+  NAMESPACE: prod
+  RELEASE_NAME: my-app
+  IMAGE_TAG: latest
+
+jobs:
+  deploy-prod:
+    runs-on: ubuntu-latest
+    environment: production
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Update kubeconfig
+        run: aws eks update-kubeconfig --name $CLUSTER_NAME
+
+      - name: Setup Helm
+        uses: azure/setup-helm@v4
+
+      - name: Deploy to PROD
+        run: |
+          helm upgrade --install $RELEASE_NAME ./helm-chart \
+          --namespace $NAMESPACE --create-namespace \
+          --set image.tag=$IMAGE_TAG \
+          -f helm-chart/values-prod.yaml
+
+      - name: Verify Rollout
+        run: kubectl rollout status deployment/$RELEASE_NAME -n $NAMESPACE
